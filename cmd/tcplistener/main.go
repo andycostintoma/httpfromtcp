@@ -25,23 +25,17 @@ func main() {
 		}
 		fmt.Println("Accepted connection from", conn.RemoteAddr())
 
-		request, err := request.RequestFromReader(conn)
-
+		req, err := request.RequestFromReader(conn)
 		if err != nil {
-			log.Fatalf("error: %s\n", err.Error())
+			log.Fatalf("error parsing request: %s\n", err.Error())
 		}
-
-		reqLine := request.RequestLine
-		fmt.Printf(`Request line:
-- Method: %s
-- Target: %s
-- Version: %s`, reqLine.Method, reqLine.RequestTarget, reqLine.HttpVersion)
-
-		// linesChan := getLinesChannel(conn)
-
-		// for line := range linesChan {
-		// 	fmt.Println(line)
-		// }
-		// fmt.Println("Connection to ", conn.RemoteAddr(), "closed")
+		fmt.Println("Request line:")
+		fmt.Printf("- Method: %s\n", req.RequestLine.Method)
+		fmt.Printf("- Target: %s\n", req.RequestLine.RequestTarget)
+		fmt.Printf("- Version: %s\n", req.RequestLine.HttpVersion)
+		fmt.Println("Headers:")
+		for key, value := range req.Headers {
+			fmt.Printf("- %s: %s\n", key, value)
+		}
 	}
 }
