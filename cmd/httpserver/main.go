@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"log"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/andycostintoma/httpfromtcp/internal/headers"
 	"github.com/andycostintoma/httpfromtcp/internal/request"
 	"github.com/andycostintoma/httpfromtcp/internal/response"
 	"github.com/andycostintoma/httpfromtcp/internal/server"
@@ -34,6 +36,10 @@ func main() {
 func handler(w *response.Writer, req *request.Request) {
 	if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin") {
 		proxyHandler(w, req)
+		return
+	}
+	if req.RequestLine.RequestTarget == "/video" {
+		videoHandler(w, req)
 		return
 	}
 	if req.RequestLine.RequestTarget == "/yourproblem" {
@@ -121,6 +127,8 @@ func proxyHandler(w *response.Writer, req *request.Request) {
 	h.Remove("Content-Length")
 	w.WriteHeaders(h)
 
+	fullBody := make([]byte, 0)
+
 	const maxChunkSize = 1024
 	buffer := make([]byte, maxChunkSize)
 	for {
@@ -132,6 +140,7 @@ func proxyHandler(w *response.Writer, req *request.Request) {
 				fmt.Println("Error writing chunked body:", err)
 				break
 			}
+			fullBody = append(fullBody, buffer[:n]...)
 		}
 		if err == io.EOF {
 			break
@@ -145,4 +154,28 @@ func proxyHandler(w *response.Writer, req *request.Request) {
 	if err != nil {
 		fmt.Println("Error writing chunked body done:", err)
 	}
+	trailers := headers.NewHeaders()
+	sha256 := fmt.Sprintf("%x", sha256.Sum256(fullBody))
+	trailers.Override("X-Content-SHA256", sha256)
+	trailers.Override("X-Content-Length", fmt.Sprintf("%d", len(fullBody)))
+	err = w.WriteTrailers(trailers)
+	if err != nil {
+		fmt.Println("Error writing trailers:", err)
+	}
+}
+
+func videoHandler(w *response.Writer, _ *request.Request) {
+	w.WriteStatusLine(response.StatusCodeSuccess)
+	const filepath = "assets/vim.mp4"
+	videoBytes, err := os.ReadFile(filepath)
+	if err != nil {
+		handler500(w, nil)
+		return
+	}
+
+	h := response.GetDefaultHeaders(len(videoBytes))
+	h.Override("Content-Type", "video/mp4")
+	w.WriteHeaders(h)
+	w.WriteBody(videoBytes)
+	return
 }
